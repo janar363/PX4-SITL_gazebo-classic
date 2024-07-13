@@ -32,12 +32,12 @@ private:
     int xDim, yDim, zDim;
     int xMin, xMax, yMin, yMax, zMin, zMax;
     std::string csvFileName, binFileName;
-    std::vector<Position> dronePosOffsets;
     std::vector<std::vector<std::vector<WindVal>>> data;
     std::vector<std::vector<std::vector<std::vector<WindVal>>>> cubePositions3DArray;
 
 public:
     // data fetch operator()
+    std::vector<Position> dronePosOffsets;
     WindVal& operator()(int x, int y, int z);
     const WindVal& operator()(int x, int y, int z) const;
 
