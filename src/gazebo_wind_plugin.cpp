@@ -22,7 +22,14 @@
 #include "gazebo_wind_plugin.h"
 #include "common.h"
 
+#include "../include/data_processor/wind_data_processor.h"
+#include <vector>
+
 namespace gazebo {
+
+std::vector<gazebo::physics::ModelPtr> models;
+std::vector<WindDataProcessor::Position> dronePositions;
+WindDataProcessor::Array3D arr("../include/wind_data_test/wisp_50.csv", "../include/wind_data_test/3darr.bin", -50, 50, -50, 50, -5, 20);
 
 GazeboWindPlugin::~GazeboWindPlugin() {
   update_connection_->~Connection();
@@ -30,6 +37,35 @@ GazeboWindPlugin::~GazeboWindPlugin() {
 
 void GazeboWindPlugin::Load(physics::WorldPtr world, sdf::ElementPtr sdf) {
   world_ = world;
+
+  // Get the list of model names from the SDF element
+  std::vector<std::string> modelNames;
+  if (sdf->HasElement("typhoon_h480")) {
+    gazebo::physics::ModelPtr model = world_->ModelByName("typhoon_h480");
+    modelNames.push_back("typhoon_h480");
+    models.push_back(model);
+
+    gzerr << "single drone found in the world." << std::endl;
+  } else if(sdf->HasElement("typhoon_h480_0")) {
+    gzerr << "multiple drones found in the world." << std::endl;
+    // Searches for drone models with the prefix "typo_h480_X" 
+    int droneIndex = 0;
+    while (true) {
+      std::string modelName = "typhoon_h480_" + std::to_string(droneIndex);
+      gazebo::physics::ModelPtr model = world_->ModelByName(modelName);
+      if (model) {
+        modelNames.push_back(modelName);
+        models.push_back(model);
+
+        droneIndex++;
+      } else {
+        break;
+      }
+    }
+  } else {
+      gzerr << "Model 'typhoon_h480' not found in the world." << std::endl;
+      return;
+  }
 
   double wind_gust_start = kDefaultWindGustStart;
   double wind_gust_duration = kDefaultWindGustDuration;
@@ -108,42 +144,82 @@ void GazeboWindPlugin::OnUpdate(const common::UpdateInfo& _info) {
   }
   last_time_ = now;
 
-  // Calculate the wind force.
-  // Get normal distribution wind strength
-  double wind_strength = std::abs(wind_velocity_distribution_(wind_velocity_generator_));
-  wind_strength = (wind_strength > wind_velocity_max_) ? wind_velocity_max_ : wind_strength;
-  // Get normal distribution wind direction
-  ignition::math::Vector3d wind_direction;
-  wind_direction.X() = wind_direction_distribution_X_(wind_direction_generator_);
-  wind_direction.Y() = wind_direction_distribution_Y_(wind_direction_generator_);
-  wind_direction.Z() = wind_direction_distribution_Z_(wind_direction_generator_);
-  // Calculate total wind velocity
-  ignition::math::Vector3d wind = wind_strength * wind_direction;
+  // on update : 
+  if(models.size()){
+    std::vector<ignition::math::Vector3d> windValues(models.size());
+    for(int i=0; i<models.size(); i++){
+      // fetch drone positions
+      ignition::math::Pose3d pose = models[i]->WorldPose();
+      ignition::math::Vector3d position = pose.Pos();
 
-  ignition::math::Vector3d wind_gust(0, 0, 0);
-  // Calculate the wind gust velocity.
-  if (now >= wind_gust_start_ && now < wind_gust_end_) {
-    // Get normal distribution wind gust strength
-    double wind_gust_strength = std::abs(wind_gust_velocity_distribution_(wind_gust_velocity_generator_));
-    wind_gust_strength = (wind_gust_strength > wind_gust_velocity_max_) ? wind_gust_velocity_max_ : wind_gust_strength;
-    // Get normal distribution wind gust direction
-    ignition::math::Vector3d wind_gust_direction;
-    wind_gust_direction.X() = wind_gust_direction_distribution_X_(wind_gust_direction_generator_);
-    wind_gust_direction.Y() = wind_gust_direction_distribution_Y_(wind_gust_direction_generator_);
-    wind_gust_direction.Z() = wind_gust_direction_distribution_Z_(wind_gust_direction_generator_);
-    wind_gust = wind_gust_strength * wind_gust_direction;
+      if(dronePositions.size() == i){
+        dronePositions.push_back((WindDataProcessor::Position){(int)position.X(), (int)position.Y(), (int)position.Z()});
+      }
+
+      if(arr.dronePosOffsets.size() == 0 || abs(position.X() - arr.dronePosOffsets[i].x) < 5 || abs(position.Y() - arr.dronePosOffsets[i].y) < 5 || abs(position.Z() - arr.dronePosOffsets[i].z) < 5)
+        arr.computePointsSerial3DArray(dronePositions, 21);
+
+      WindDataProcessor::WindVal windVal  = arr.getCubeWindValue(i, position.X(), position.Y(), position.Z());
+      windValues[i] = ignition::math::Vector3d(windVal.u, windVal.v, windVal.w);
+
+      // air density at sea level at 15 degree C = 1.225 kg/m^3
+      double airDensity = 1.225;
+      // drag coeff perpendicular to axis
+      double dragCoeff = 1.2;
+      /*
+         dimensions of Typhoon480 drone assuming it to be as rough cylinder,
+         with diameter = w
+
+      */
+      double diameter = 0.52; // in meters
+      double height = 0.21; // in meters
+      // wind pressure = 1/2 * air density * wind velocity ^ 2
+      // double windPressure = 0.5 * airDensity * windValues[i].Dot(windValues[i]) * windValues.Normalize();
+
+      // area
+      double pi = 3.14;
+      double area = height * pi * diameter / 2;
+
+      // wind force = area * wind pressure * dragCoeff
+      ignition::math::Vector3d windForce = 0.5 * dragCoeff * airDensity * area * windValues[i].Dot(windValues[i]) * windValues[i].Normalize();
+
+      gazebo::physics::LinkPtr link = models[i]->GetLink("base_link");
+      link->AddForce(windForce);
+
+      // ignition::math::Vector3d wind_gust(0, 0, 0);
+      // // Calculate the wind gust velocity.
+      // if (now >= wind_gust_start_ && now < wind_gust_end_) {
+      //   // Get normal distribution wind gust strength
+      //   double wind_gust_strength = std::abs(wind_gust_velocity_distribution_(wind_gust_velocity_generator_));
+      //   wind_gust_strength = (wind_gust_strength > wind_gust_velocity_max_) ? wind_gust_velocity_max_ : wind_gust_strength;
+      //   // Get normal distribution wind gust direction
+      //   ignition::math::Vector3d wind_gust_direction;
+      //   wind_gust_direction.X() = wind_gust_direction_distribution_X_(wind_gust_direction_generator_);
+      //   wind_gust_direction.Y() = wind_gust_direction_distribution_Y_(wind_gust_direction_generator_);
+      //   wind_gust_direction.Z() = wind_gust_direction_distribution_Z_(wind_gust_direction_generator_);
+      //   wind_gust = wind_gust_strength * wind_gust_direction;
+      // }
+
+      gazebo::msgs::Vector3d* wind_v = new gazebo::msgs::Vector3d();
+      // wind_v->set_x(wind.X() + wind_gust.X());
+      // wind_v->set_y(wind.Y() + wind_gust.Y());
+      // wind_v->set_z(wind.Z() + wind_gust.Z());
+      wind_v->set_x(windValues[i].X());
+      wind_v->set_y(windValues[i].Y());
+      wind_v->set_z(windValues[i].Z());
+
+
+      wind_msg.set_frame_id(frame_id_);
+      wind_msg.set_time_usec(now.Double() * 1e6);
+      wind_msg.set_allocated_velocity(wind_v);
+
+      wind_pub_->Publish(wind_msg);
+
+
+    }
+    
+
   }
-
-  gazebo::msgs::Vector3d* wind_v = new gazebo::msgs::Vector3d();
-  wind_v->set_x(wind.X() + wind_gust.X());
-  wind_v->set_y(wind.Y() + wind_gust.Y());
-  wind_v->set_z(wind.Z() + wind_gust.Z());
-
-  wind_msg.set_frame_id(frame_id_);
-  wind_msg.set_time_usec(now.Double() * 1e6);
-  wind_msg.set_allocated_velocity(wind_v);
-
-  wind_pub_->Publish(wind_msg);
 }
 
 GZ_REGISTER_WORLD_PLUGIN(GazeboWindPlugin);
