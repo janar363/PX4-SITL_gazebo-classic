@@ -36,5 +36,23 @@
       <real_time_update_rate>250</real_time_update_rate>
       <magnetic_field>6.0e-6 2.3e-5 -4.2e-5</magnetic_field>
     </physics>
+    <plugin name="wind" filename="../../../build/px4_sitl_default/build_gazebo/libgazebo_wind_plugin.so">
+    <frameId>base_link</frameId>
+    <linkName>base_link</linkName>
+    <robotNamespace/>
+    <windVelocityMean>0 0 0</windVelocityMean>
+    <windVelocityMax>10 10 10</windVelocityMax>
+    <windVelocityVariance>2 2 2</windVelocityVariance>
+    <windDirectionMean>1 0 0</windDirectionMean>
+    <windDirectionVariance>0.1 0.1 0.1</windDirectionVariance>
+    <windGustStart>0</windGustStart>
+    <windGustDuration>0</windGustDuration>
+    <windGustVelocityMean>5 5 5</windGustVelocityMean>
+    <windGustVelocityMax>10 10 10</windGustVelocityMax>
+    <windGustVelocityVariance>2 2 2</windGustVelocityVariance>
+    <windGustDirectionMean>1 0 0</windGustDirectionMean>
+    <windGustDirectionVariance>0.1 0.1 0.1</windGustDirectionVariance>
+    <applyWindGust>false</applyWindGust>
+  </plugin>
   </world>
 </sdf>
