@@ -344,7 +344,7 @@ add_library(sensor_msgs SHARED ${SEN_PROTO_SRCS})
 #---------#
 # Plugins #
 #---------#
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/data_processor)
+include_directories(include/data_processor)
 link_libraries(mav_msgs nav_msgs std_msgs sensor_msgs)
 link_libraries(physics_msgs)
 
