@@ -46,8 +46,10 @@ void GazeboWindPlugin::Load(physics::WorldPtr world, sdf::ElementPtr sdf) {
     models.push_back(model);
 
     gzerr << "single drone found in the world." << std::endl;
+    std::cout << "single drone found in the world." << std::endl;
   } else if(sdf->HasElement("typhoon_h480_0")) {
     gzerr << "multiple drones found in the world." << std::endl;
+    std::cout << "multiple drones found in the world." << std::endl;
     // Searches for drone models with the prefix "typo_h480_X" 
     int droneIndex = 0;
     while (true) {
@@ -185,6 +187,7 @@ void GazeboWindPlugin::OnUpdate(const common::UpdateInfo& _info) {
 
       gazebo::physics::LinkPtr link = models[i]->GetLink("base_link");
       link->AddForce(windForce);
+      std::cout << "applying wind force at pos : (" << position.X() << ", " << position.Y() << ", " << position.Z() << ") -> force (" << windForce.X() << ", " << windForce.Y() << ", " << windForce.Z() << std::endl; 
 
       // ignition::math::Vector3d wind_gust(0, 0, 0);
       // // Calculate the wind gust velocity.
