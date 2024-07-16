@@ -344,7 +344,7 @@ add_library(sensor_msgs SHARED ${SEN_PROTO_SRCS})
 #---------#
 # Plugins #
 #---------#
-include_directories(include/data_processor)
+include_directories(include/data_processor/)
 link_libraries(mav_msgs nav_msgs std_msgs sensor_msgs)
 link_libraries(physics_msgs)
 
@@ -365,10 +365,7 @@ add_library(gazebo_imu_plugin SHARED src/gazebo_imu_plugin.cpp)
 add_library(gazebo_mavlink_interface SHARED src/gazebo_mavlink_interface.cpp src/mavlink_interface.cpp)
 add_library(gazebo_motor_model SHARED src/gazebo_motor_model.cpp)
 add_library(gazebo_multirotor_base_plugin SHARED src/gazebo_multirotor_base_plugin.cpp)
-add_library(gazebo_wind_plugin SHARED 
-    src/gazebo_wind_plugin.cpp
-    include/data_processor/WindDataProcessor.cpp
-)
+add_library(gazebo_wind_plugin SHARED src/gazebo_wind_plugin.cpp)
 add_library(gazebo_magnetometer_plugin SHARED src/gazebo_magnetometer_plugin.cpp src/geo_mag_declination.cpp)
 add_library(gazebo_barometer_plugin SHARED src/gazebo_barometer_plugin.cpp)
 add_library(gazebo_catapult_plugin SHARED src/gazebo_catapult_plugin.cpp)
