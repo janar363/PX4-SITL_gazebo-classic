@@ -143,9 +143,11 @@ void GazeboWindPlugin::OnUpdate(const common::UpdateInfo& _info) {
   common::Time now = world_->GetSimTime();
 #endif
   if ((now - last_time_).Double() < pub_interval_ || pub_interval_ == 0.0) {
+    gzlog << "exiting on update" << std::endl;
     return;
   }
   last_time_ = now;
+  gzlog << "entered on update" << std::endl;
 
   // on update : 
   if(models.size()){
