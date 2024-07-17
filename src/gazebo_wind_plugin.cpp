@@ -29,7 +29,7 @@ namespace gazebo {
 
 std::vector<gazebo::physics::ModelPtr> models;
 std::vector<WindDataProcessor::Position> dronePositions;
-WindDataProcessor::Array3D arr("../include/wind_data_test/wisp_50.csv", "../include/wind_data_test/3darr.bin", -50, 50, -50, 50, -5, 20);
+WindDataProcessor::Array3D arr("../include/wind_data_test/wisp_50.csv", "../include/wind_data_test/3darr.bin", -25, 25, -25, 25, 0, 10);
 
 GazeboWindPlugin::~GazeboWindPlugin() {
   update_connection_->~Connection();
