@@ -40,13 +40,15 @@ void GazeboWindPlugin::Load(physics::WorldPtr world, sdf::ElementPtr sdf) {
 
   // Get the list of model names from the SDF element
   std::vector<std::string> modelNames;
-  if (sdf->HasElement("typhoon_h480")) {
+  while(True){
+    if (sdf->HasElement("typhoon_h480")) {
     gazebo::physics::ModelPtr model = world_->ModelByName("typhoon_h480");
     modelNames.push_back("typhoon_h480");
     models.push_back(model);
 
     gzlog << "single drone found in the world." << std::endl;
     std::cout << "single drone found in the world." << std::endl;
+    break;
   } else if(sdf->HasElement("typhoon_h480_0")) {
     gzlog << "multiple drones found in the world." << std::endl;
     std::cout << "multiple drones found in the world." << std::endl;
@@ -64,11 +66,15 @@ void GazeboWindPlugin::Load(physics::WorldPtr world, sdf::ElementPtr sdf) {
         break;
       }
     }
+    break;
   } else {
       gzlog << "Model 'typhoon_h480' not found in the world." << std::endl;
       std::cout << "Model 'typhoon_h480' not found in the world." << std::endl;
       return;
   }
+  }
+  
+  
 
   double wind_gust_start = kDefaultWindGustStart;
   double wind_gust_duration = kDefaultWindGustDuration;
