@@ -40,7 +40,7 @@ void GazeboWindPlugin::Load(physics::WorldPtr world, sdf::ElementPtr sdf) {
 
   // Get the list of model names from the SDF element
   std::vector<std::string> modelNames;
-  while(True){
+  while(true){
     if (sdf->HasElement("typhoon_h480")) {
     gazebo::physics::ModelPtr model = world_->ModelByName("typhoon_h480");
     modelNames.push_back("typhoon_h480");
