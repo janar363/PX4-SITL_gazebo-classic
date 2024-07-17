@@ -45,10 +45,10 @@ void GazeboWindPlugin::Load(physics::WorldPtr world, sdf::ElementPtr sdf) {
     modelNames.push_back("typhoon_h480");
     models.push_back(model);
 
-    gzerr << "single drone found in the world." << std::endl;
+    gzlog << "single drone found in the world." << std::endl;
     std::cout << "single drone found in the world." << std::endl;
   } else if(sdf->HasElement("typhoon_h480_0")) {
-    gzerr << "multiple drones found in the world." << std::endl;
+    gzlog << "multiple drones found in the world." << std::endl;
     std::cout << "multiple drones found in the world." << std::endl;
     // Searches for drone models with the prefix "typo_h480_X" 
     int droneIndex = 0;
@@ -65,7 +65,8 @@ void GazeboWindPlugin::Load(physics::WorldPtr world, sdf::ElementPtr sdf) {
       }
     }
   } else {
-      gzerr << "Model 'typhoon_h480' not found in the world." << std::endl;
+      gzlog << "Model 'typhoon_h480' not found in the world." << std::endl;
+      std::cout << "Model 'typhoon_h480' not found in the world." << std::endl;
       return;
   }
 
@@ -187,6 +188,7 @@ void GazeboWindPlugin::OnUpdate(const common::UpdateInfo& _info) {
 
       gazebo::physics::LinkPtr link = models[i]->GetLink("base_link");
       link->AddForce(windForce);
+      gzlog << "applying wind force at pos : (" << position.X() << ", " << position.Y() << ", " << position.Z() << ") -> force (" << windForce.X() << ", " << windForce.Y() << ", " << windForce.Z() << std::endl;
       std::cout << "applying wind force at pos : (" << position.X() << ", " << position.Y() << ", " << position.Z() << ") -> force (" << windForce.X() << ", " << windForce.Y() << ", " << windForce.Z() << std::endl; 
 
       // ignition::math::Vector3d wind_gust(0, 0, 0);
@@ -222,6 +224,9 @@ void GazeboWindPlugin::OnUpdate(const common::UpdateInfo& _info) {
     }
     
 
+  } else {
+    std::cout << "model not found\n";
+    gzlog << "model not found\n";
   }
 }
 
