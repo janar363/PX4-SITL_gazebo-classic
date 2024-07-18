@@ -135,6 +135,7 @@ void GazeboWindPlugin::Load(physics::WorldPtr world, sdf::ElementPtr sdf) {
 
 // This gets called by the world update start event.
 void GazeboWindPlugin::OnUpdate(const common::UpdateInfo& _info) {
+    std::cout << "wind plugin on update called" << std::endl;
   // Get the current simulation time.
 #if GAZEBO_MAJOR_VERSION >= 9
   common::Time now = world_->SimTime();
