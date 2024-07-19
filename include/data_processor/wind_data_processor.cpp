@@ -87,7 +87,7 @@ void Array3D::loadData() {
         file.close();
 
         // saving data as binary file
-        saveToFile("wind_data_test/3darr.bin");
+        saveToFile("3darr.bin");
 
     }
 
