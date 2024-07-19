@@ -7,6 +7,7 @@
 #include <limits>
 #include <future>
 #include <chrono>
+#include <filesystem> // remove after testing
 
 namespace WindDataProcessor {
 
@@ -44,6 +45,7 @@ void Array3D::loadData() {
 
     } else {
         // loads csv file
+        std::cout << "Current working directory: " << std::filesystem::current_path() << std::endl;
         std::ifstream file(csvFileName);
         if (!file) {
             std::cout << "Failed to open file: " << csvFileName << std::endl;
