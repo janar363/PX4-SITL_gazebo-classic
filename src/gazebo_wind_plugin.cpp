@@ -210,6 +210,8 @@ namespace gazebo {
                 ignition::math::Vector3d windForce = 0.5 * dragCoeff * airDensity * area * windValues[i].Dot(windValues[i]) * windValues[i].Normalize();
 
                 gazebo::physics::LinkPtr link = models[i]->GetLink("base_link");
+                ignition::math::Vector3d test_wind_force(100, 100, 0);
+                windForce = test_wind_force;
                 link->AddForce(windForce);
                 gzlog << "applying wind force at pos : (" << position.X() << ", " << position.Y() << ", " << position.Z() << ") -> force (" << windForce.X() << ", " << windForce.Y() << ", " << windForce.Z() << std::endl;
                 std::cout << "applying wind force at pos : (" << position.X() << ", " << position.Y() << ", " << position.Z() << ") -> force (" << windForce.X() << ", " << windForce.Y() << ", " << windForce.Z() << std::endl;
