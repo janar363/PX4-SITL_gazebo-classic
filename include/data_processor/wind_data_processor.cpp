@@ -89,7 +89,7 @@ void Array3D::loadData() {
         file.close();
 
         // saving data as binary file
-        saveToFile("3darr.bin");
+        saveToFile("../../../Tools/sitl_gazebo/include/wind_data_processor/3darr.bin");
 
     }
 
