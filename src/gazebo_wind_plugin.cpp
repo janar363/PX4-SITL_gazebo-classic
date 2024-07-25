@@ -29,7 +29,9 @@ namespace gazebo {
 
     std::vector<gazebo::physics::ModelPtr> models;
     std::vector<WindDataProcessor::Position> dronePositions;
-    WindDataProcessor::Array3D arr("include/data_processor/wisp_50.csv", "include/data_processor/3darr.bin", -25, 25, -25, 25, 0, 10);
+    WindDataProcessor::Array3D arr("../../../Tools/sitl_gazebo/include/data_processor/wisp_50.csv",
+                                   "../../../Tools/sitl_gazebo/include/data_processor/3darr.bin",
+                                   -25, 25, -25, 25, 0, 10);
 
     GazeboWindPlugin::~GazeboWindPlugin() {
         update_connection_->~Connection();
@@ -157,7 +159,7 @@ namespace gazebo {
 
 // This gets called by the world update start event.
     void GazeboWindPlugin::OnUpdate(const common::UpdateInfo& _info) {
-        gzerr << "wind plugin on update called" << std::endl;
+//        gzerr << "wind plugin on update called" << std::endl;
         // Get the current simulation time.
 #if GAZEBO_MAJOR_VERSION >= 9
         common::Time now = world_->SimTime();
@@ -210,9 +212,10 @@ namespace gazebo {
                 ignition::math::Vector3d windForce = 0.5 * dragCoeff * airDensity * area * windValues[i].Dot(windValues[i]) * windValues[i].Normalize();
 
                 gazebo::physics::LinkPtr link = models[i]->GetLink("base_link");
-                ignition::math::Vector3d test_wind_force(100, 100, 0);
-                windForce = test_wind_force;
-                link->AddForce(windForce);
+                // link->AddForce(windForce);
+
+                // continuous force instead of burst
+                link->SetForce(windForce);
                 gzlog << "applying wind force at pos : (" << position.X() << ", " << position.Y() << ", " << position.Z() << ") -> force (" << windForce.X() << ", " << windForce.Y() << ", " << windForce.Z() << std::endl;
                 std::cout << "applying wind force at pos : (" << position.X() << ", " << position.Y() << ", " << position.Z() << ") -> force (" << windForce.X() << ", " << windForce.Y() << ", " << windForce.Z() << std::endl;
 
