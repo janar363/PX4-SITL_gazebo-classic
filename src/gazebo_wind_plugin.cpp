@@ -208,8 +208,10 @@ namespace gazebo {
                 double pi = 3.14;
                 double area = height * pi * diameter / 2;
 
+                double debug_magnify = 100; // for debugging purposes, to magnify the wind force for better visualization
+
                 // wind force = area * wind pressure * dragCoeff
-                ignition::math::Vector3d windForce = 0.5 * dragCoeff * airDensity * area * windValues[i].Dot(windValues[i]) * windValues[i].Normalize();
+                ignition::math::Vector3d windForce = debug_magnify * 0.5 * dragCoeff * airDensity * area * windValues[i].Dot(windValues[i]) * windValues[i].Normalize();
 
                 gazebo::physics::LinkPtr link = models[i]->GetLink("base_link");
                 // link->AddForce(windForce);
