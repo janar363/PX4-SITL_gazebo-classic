@@ -4,61 +4,58 @@
 
 #include <iostream>
 #include <vector>
-#include <unordered_map>
-#include <chrono>
-#include <mutex>
+#include <string>
+#include <nanoflann.hpp>
+#include <memory>
 
 namespace WindDataProcessor {
 
 // Structs
     struct Position {
-        int x, y, z;
+        double x, y, z;
     };
 
     struct WindVal {
-        float u, v, w;
-    };
-
-    struct KeyHasher {
-        size_t operator()(const Position& pos) const;
-    };
-
-    struct KeyEquals {
-        bool operator()(const Position& lhs, const Position& rhs) const;
+        double u, v, w;
     };
 
 // Array3D class definition
     class Array3D {
     private:
-        int cubeSide;
-        int xDim, yDim, zDim;
-        int xMin, xMax, yMin, yMax, zMin, zMax;
-        std::string csvFileName, binFileName;
-        std::vector<std::vector<std::vector<WindVal>>> data;
-        std::vector<std::vector<std::vector<std::vector<WindVal>>>> cubePositions3DArray;
+        std::string csvFileName;
 
+        // Variables to store the min and max dimensions of the 3D space
+        double minX, minY, minZ;
+        double maxX, maxY, maxZ;
+
+        // Storage for 3D points (x, y, z) and corresponding wind values (u, v, w)
+        std::vector<std::array<double, 3>> positions;
+        std::vector<WindVal> windValues;
+
+        // KD-Tree-related members
+        using KDTree = nanoflann::KDTreeSingleIndexAdaptor<
+                nanoflann::L2_Simple_Adaptor<double, Array3D>,
+                Array3D, 3 /* dimensionality */>;
+
+        std::unique_ptr<KDTree> kdTree;
+
+        // Internal functions
         void determineDimensions();
+        void loadData();
+        void constructKDTree();
 
     public:
-        std::vector<Position> dronePosOffsets;
-        WindVal& operator()(int x, int y, int z);
-        const WindVal& operator()(int x, int y, int z) const;
+        // Constructor
+        Array3D(const std::string& csvFile);
 
-        Array3D(const std::string& csvFile, const std::string& binFile);
+        // Function to get the wind value at a given 3D point (x, y, z)
+        WindVal getWindValue(double x, double y, double z) const;
 
-        void loadData();
-        void saveToFile(const std::string& filename) const;
-        void loadBinaryFile(const std::string& filename);
-
-        WindVal getWindValue(int x, int y, int z) const;
-        void computePointsSerial3DArray(const std::vector<Position>& dronePositions, int side);
-        WindVal getCubeWindValue(int droneIndex, int x, int y, int z) const;
-
-        std::vector<int> getSize() const;
-        size_t calculateCubePositions3DArrayMemoryUsage();
-        void printCubePositions3DArrayMemoryUsage();
-        void printMemoryUsage() const;
-        void clearData();
+        // KD-Tree helper functions required by nanoflann
+        size_t kdtree_get_point_count() const;
+        double kdtree_get_pt(const size_t idx, int dim) const;
+        template <class BBOX>
+        bool kdtree_get_bbox(BBOX& /*bb*/) const;
     };
 
 } // namespace WindDataProcessor

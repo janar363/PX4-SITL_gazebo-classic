@@ -29,8 +29,7 @@ namespace gazebo {
 
     std::vector<gazebo::physics::ModelPtr> models;
     std::vector<WindDataProcessor::Position> dronePositions;
-    WindDataProcessor::Array3D arr("../../../Tools/sitl_gazebo/include/data_processor/wisp_50.csv",
-                                   "../../../Tools/sitl_gazebo/include/data_processor/3darr.bin");
+    WindDataProcessor::Array3D arr("../../../Tools/sitl_gazebo/include/data_processor/wisp_50.csv");
 
     GazeboWindPlugin::~GazeboWindPlugin() {
         update_connection_->~Connection();
@@ -178,66 +177,16 @@ namespace gazebo {
                 ignition::math::Pose3d pose = models[i]->WorldPose();
                 ignition::math::Vector3d position = pose.Pos();
 
-                if(dronePositions.size() == i) {
-                    dronePositions.push_back((WindDataProcessor::Position){(int)position.X(), (int)position.Y(), (int)position.Z()});
-                }
-
-                if(arr.dronePosOffsets.empty() || abs(position.X() - arr.dronePosOffsets[i].x) < 5 || abs(position.Y() - arr.dronePosOffsets[i].y) < 5 || abs(position.Z() - arr.dronePosOffsets[i].z) < 5) {
-                    arr.computePointsSerial3DArray(dronePositions, 21);
-                }
-
-                WindDataProcessor::WindVal windVal = arr.getCubeWindValue(i, position.X(), position.Y(), position.Z());
+                WindDataProcessor::WindVal windVal = arr.getWindValue(position.X(), position.Y(), position.Z());
                 windValues[i] = ignition::math::Vector3d(windVal.u, windVal.v, windVal.w);
 
-                // air density at sea level at 15 degree C = 1.225 kg/m^3
-                // double airDensity = 1.225;
-                // drag coeff perpendicular to axis
-                // double dragCoeff = 1.2;
-                /*
-                   dimensions of Typhoon480 drone assuming it to be as rough cylinder,
-                   with diameter = w
-
-                */
-                // double diameter = 0.52; // in meters
-                //double height = 0.21; // in meters
-                // wind pressure = 1/2 * air density * wind velocity ^ 2
-                // double windPressure = 0.5 * airDensity * windValues[i].Dot(windValues[i]) * windValues.Normalize();
-
-                // area
-                // double pi = 3.14;
-                // double area = height * pi * diameter / 2;
-
-                // double debug_magnify = 100; // for debugging purposes, to magnify the wind force for better visualization
-
-                // wind force = area * wind pressure * dragCoeff
-                // ignition::math::Vector3d windForce = 0.5 * dragCoeff * airDensity * area * windValues[i].Dot(windValues[i]) * windValues[i].Normalize();
-                ignition::math::Vector3d windForce = windValues[i].Dot(windValues[i]) * windValues[i].Normalize();
+                ignition::math::Vector3d windForce = windValues[i];
                 gazebo::physics::LinkPtr link = models[i]->GetLink("base_link");
-                // link->AddForce(windForce);
-
-                // continuous force instead of burst
                 link->SetForce(windForce);
                 gzlog << "applying wind force at pos : (" << position.X() << ", " << position.Y() << ", " << position.Z() << ") -> force (" << windForce.X() << ", " << windForce.Y() << ", " << windForce.Z() << std::endl;
                 std::cout << "applying wind force at pos : (" << position.X() << ", " << position.Y() << ", " << position.Z() << ") -> force (" << windForce.X() << ", " << windForce.Y() << ", " << windForce.Z() << std::endl;
 
-                // ignition::math::Vector3d wind_gust(0, 0, 0);
-                // // Calculate the wind gust velocity.
-                // if (now >= wind_gust_start_ && now < wind_gust_end_) {
-                //   // Get normal distribution wind gust strength
-                //   double wind_gust_strength = std::abs(wind_gust_velocity_distribution_(wind_gust_velocity_generator_));
-                //   wind_gust_strength = (wind_gust_strength > wind_gust_velocity_max_) ? wind_gust_velocity_max_ : wind_gust_strength;
-                //   // Get normal distribution wind gust direction
-                //   ignition::math::Vector3d wind_gust_direction;
-                //   wind_gust_direction.X() = wind_gust_direction_distribution_X_(wind_gust_direction_generator_);
-                //   wind_gust_direction.Y() = wind_gust_direction_distribution_Y_(wind_gust_direction_generator_);
-                //   wind_gust_direction.Z() = wind_gust_direction_distribution_Z_(wind_gust_direction_generator_);
-                //   wind_gust = wind_gust_strength * wind_gust_direction;
-                // }
-
                 gazebo::msgs::Vector3d* wind_v = new gazebo::msgs::Vector3d();
-                // wind_v->set_x(wind.X() + wind_gust.X());
-                // wind_v->set_y(wind.Y() + wind_gust.Y());
-                // wind_v->set_z(wind.Z() + wind_gust.Z());
                 wind_v->set_x(windValues[i].X());
                 wind_v->set_y(windValues[i].Y());
                 wind_v->set_z(windValues[i].Z());
