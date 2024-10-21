@@ -9,122 +9,270 @@
 #include <future>
 #include <chrono>
 #include <filesystem> // remove after testing
-#include <nanoflann.hpp> // Include nanoflann for kd-tree implementation
 
 namespace WindDataProcessor {
 
-// Constructor for Array3D that reads CSV and builds the kd-tree
-    Array3D::Array3D(const std::string& csvFile) {
+// 3D array implementation
+
+    Array3D::Array3D(const std::string& csvFile, const std::string& binFile) {
         this->csvFileName = csvFile;
-        // csv will have x, y, z, u, v, w: representing the position and wind values
-        // Determine the dimensions of the 3D array
+        this->binFileName = binFile;
+
         determineDimensions();
-        // Read the CSV file and construct a kd-tree from the 3D array
-        loadData();
-        constructKDTree();
+
+        xDim = xMax - xMin + 1;
+        yDim = yMax - yMin + 1;
+        zDim = zMax - zMin + 1;
     }
 
-// Function to determine the dimensions of the 3D array
     void Array3D::determineDimensions() {
-        // Example: Reading the CSV file to determine dimensions.
+        xMin = yMin = zMin = std::numeric_limits<int>::max();
+        xMax = yMax = zMax = std::numeric_limits<int>::min();
+
         std::ifstream file(csvFileName);
-        if (!file.is_open()) {
-            throw std::runtime_error("Cannot open CSV file");
+        if (!file) {
+            throw std::runtime_error("Failed to open CSV file: " + csvFileName);
         }
 
-        double x, y, z, u, v, w;
-        double minX = std::numeric_limits<double>::max();
-        double minY = std::numeric_limits<double>::max();
-        double minZ = std::numeric_limits<double>::max();
-        double maxX = std::numeric_limits<double>::lowest();
-        double maxY = std::numeric_limits<double>::lowest();
-        double maxZ = std::numeric_limits<double>::lowest();
-
         std::string line;
+        std::getline(file, line); // Skip the header line
+
         while (std::getline(file, line)) {
             std::stringstream ss(line);
-            if (ss >> x >> y >> z >> u >> v >> w) {
-                minX = std::min(minX, x);
-                minY = std::min(minY, y);
-                minZ = std::min(minZ, z);
-                maxX = std::max(maxX, x);
-                maxY = std::max(maxY, y);
-                maxZ = std::max(maxZ, z);
-            }
+            std::string cell;
+
+            int x, y, z;
+
+            std::getline(ss, cell, ',');
+            x = std::stoi(cell);
+
+            std::getline(ss, cell, ',');
+            y = std::stoi(cell);
+
+            std::getline(ss, cell, ',');
+            z = std::stoi(cell);
+
+            xMin = std::min(xMin, x);
+            xMax = std::max(xMax, x);
+            yMin = std::min(yMin, y);
+            yMax = std::max(yMax, y);
+            zMin = std::min(zMin, z);
+            zMax = std::max(zMax, z);
         }
 
         file.close();
-
-        this->minX = minX;
-        this->minY = minY;
-        this->minZ = minZ;
-        this->maxX = maxX;
-        this->maxY = maxY;
-        this->maxZ = maxZ;
     }
 
-// Function to load data from the CSV file into the 3D array and windValues
     void Array3D::loadData() {
-        std::ifstream file(csvFileName);
-        if (!file.is_open()) {
-            throw std::runtime_error("Cannot open CSV file");
+        data.resize(zDim, std::vector<std::vector<WindVal>>(yDim, std::vector<WindVal>(xDim)));
+
+        std::ifstream binFileStream(binFileName, std::ios::binary);
+        if (binFileStream) {
+            binFileStream.close();
+            loadBinaryFile(binFileName);
+        } else {
+            std::ifstream file(csvFileName);
+            if (!file) {
+                std::cout << "Failed to open file: " << csvFileName << std::endl;
+                return;
+            }
+
+            std::string line;
+            std::getline(file, line); // Skip the header line
+
+            while (std::getline(file, line)) {
+                std::stringstream ss(line);
+                std::string cell;
+
+                int x, y, z;
+                WindVal val;
+
+                std::getline(ss, cell, ',');
+                x = std::stoi(cell);
+
+                std::getline(ss, cell, ',');
+                y = std::stoi(cell);
+
+                std::getline(ss, cell, ',');
+                z = std::stoi(cell);
+
+                std::getline(ss, cell, ',');
+                val.u = (cell.empty()) ? 0.0f : std::stof(cell);
+
+                std::getline(ss, cell, ',');
+                val.v = (cell.empty()) ? 0.0f : std::stof(cell);
+
+                std::getline(ss, cell);
+                val.w = (cell.empty()) ? 0.0f : std::stof(cell);
+
+                data[z - zMin][y - yMin][x - xMin] = val;
+            }
+
+            file.close();
+            saveToFile("../../../Tools/sitl_gazebo/include/data_processor/3darr.bin");
+        }
+    }
+
+    void Array3D::clearData() {
+        data.clear();
+    }
+
+    WindVal& Array3D::operator()(int x, int y, int z) {
+        return data[z - zMin][y - yMin][x - xMin];
+    }
+
+    const WindVal& Array3D::operator()(int x, int y, int z) const {
+        return data[z - zMin][y - yMin][x - xMin];
+    }
+
+    std::vector<int> Array3D::getSize() const {
+        return {zDim, yDim, xDim};
+    }
+
+    void Array3D::saveToFile(const std::string& filename) const {
+        std::ofstream file(filename, std::ios::binary);
+        if (!file) {
+            std::cout << "Failed to open file for writing: " << filename << std::endl;
+            return;
         }
 
-        double x, y, z, u, v, w;
-        std::string line;
-        while (std::getline(file, line)) {
-            std::stringstream ss(line);
-            if (ss >> x >> y >> z >> u >> v >> w) {
-                // Store the 3D point and corresponding wind vector
-                positions.push_back({x, y, z});
-                windValues.push_back({u, v, w});
+        file.write(reinterpret_cast<const char*>(&zDim), sizeof(int));
+        file.write(reinterpret_cast<const char*>(&yDim), sizeof(int));
+        file.write(reinterpret_cast<const char*>(&xDim), sizeof(int));
+
+        for (int z = 0; z < zDim; ++z) {
+            for (int y = 0; y < yDim; ++y) {
+                file.write(reinterpret_cast<const char*>(data[z][y].data()), xDim * sizeof(WindVal));
             }
         }
 
         file.close();
     }
 
-// Function to construct the kd-tree from the loaded 3D points
-    void Array3D::constructKDTree() {
-        // Build the kd-tree using nanoflann
-        kdTree = std::make_unique<KDTree>(3, *this, nanoflann::KDTreeSingleIndexAdaptorParams(10 /* max leaf */));
-        kdTree->buildIndex();
+    void Array3D::loadBinaryFile(const std::string& filename) {
+        std::ifstream file(filename, std::ios::binary);
+        if (!file) {
+            std::cout << "Failed to open file for reading: " << filename << std::endl;
+            return;
+        }
+
+        file.read(reinterpret_cast<char*>(&zDim), sizeof(int));
+        file.read(reinterpret_cast<char*>(&yDim), sizeof(int));
+        file.read(reinterpret_cast<char*>(&xDim), sizeof(int));
+
+        data.resize(zDim, std::vector<std::vector<WindVal>>(yDim, std::vector<WindVal>(xDim)));
+
+        for (int z = 0; z < zDim; ++z) {
+            for (int y = 0; y < yDim; ++y) {
+                file.read(reinterpret_cast<char*>(data[z][y].data()), xDim * sizeof(WindVal));
+            }
+        }
+
+        file.close();
     }
 
-// Function to get the wind value at a specific point using nearest neighbor search
-    WindVal Array3D::getWindValue(double x, double y, double z) const {
-        // Prepare a query point
-        double queryPoint[3] = {x, y, z};
+    WindVal Array3D::getWindValue(int x, int y, int z) const {
+        if (z < zMin || z > zMax || y < yMin || y > yMax || x < xMin || x > xMax) {
+            return {0.0f, 0.0f, 0.0f};
+        }
 
-        // Variables for nearest neighbor search result
-        size_t nearestIdx;
-        double outDistSqr;
-
-        // Perform kd-tree search
-        nanoflann::KNNResultSet<double> resultSet(1); // Looking for 1 nearest neighbor
-        resultSet.init(&nearestIdx, &outDistSqr);
-        kdTree->findNeighbors(resultSet, &queryPoint[0], nanoflann::SearchParameters(10));
-
-        // Return the corresponding wind value for the nearest point
-        return windValues[nearestIdx];
+        return data[z - zMin][y - yMin][x - xMin];
     }
 
-// Implementation of the required methods for nanoflann compatibility
+    void Array3D::computePointsSerial3DArray(const std::vector<Position>& dronePositions, int side) {
+        loadData();
 
-// Function to return the number of data points in the kd-tree
-    size_t Array3D::kdtree_get_point_count() const {
-        return positions.size();
+        int halfSide = side / 2;
+        int cubeXDim = side;
+        int cubeYDim = side;
+        int cubeZDim = side;
+
+        cubePositions3DArray.resize(dronePositions.size(), std::vector<std::vector<std::vector<WindVal>>>(
+                cubeZDim, std::vector<std::vector<WindVal>>(cubeYDim, std::vector<WindVal>(cubeXDim))));
+
+        dronePosOffsets = dronePositions;
+        cubeSide = side;
+
+        for (size_t droneIndex = 0; droneIndex < dronePositions.size(); ++droneIndex) {
+            const Position& dronePos = dronePositions[droneIndex];
+
+            for (int z = -halfSide; z <= halfSide; ++z) {
+                for (int y = -halfSide; y <= halfSide; ++y) {
+                    for (int x = -halfSide; x <= halfSide; ++x) {
+                        int cubeX = x + halfSide;
+                        int cubeY = y + halfSide;
+                        int cubeZ = z + halfSide;
+
+                        WindVal value = getWindValue(dronePos.z + z, dronePos.y + y, dronePos.x + x);
+
+                        cubePositions3DArray[droneIndex][cubeZ][cubeY][cubeX] = value;
+                    }
+                }
+            }
+        }
+
+        clearData();
     }
 
-// Function to get a specific dimension of a point for kd-tree search
-    double Array3D::kdtree_get_pt(const size_t idx, int dim) const {
-        return positions[idx][dim];
+    WindVal Array3D::getCubeWindValue(int droneIndex, int x, int y, int z) const {
+        if (droneIndex < 0 || droneIndex >= static_cast<int>(dronePosOffsets.size())) {
+            return {0.0f, 0.0f, 0.0f};
+        }
+
+        const Position& dronePosOffset = dronePosOffsets[droneIndex];
+        int halfSide = cubeSide / 2;
+        int cubeX = x - dronePosOffset.x + halfSide;
+        int cubeY = y - dronePosOffset.y + halfSide;
+        int cubeZ = z - dronePosOffset.z + halfSide;
+
+        if (cubeX < 0 || cubeX >= cubeSide || cubeY < 0 || cubeY >= cubeSide || cubeZ < 0 || cubeZ >= cubeSide) {
+            return {0.0f, 0.0f, 0.0f};
+        }
+
+        return cubePositions3DArray[droneIndex][cubeZ][cubeY][cubeX];
     }
 
-// Optional function to compute the bounding box of the points (not mandatory for kd-tree search)
-    template <class BBOX>
-    bool Array3D::kdtree_get_bbox(BBOX& /*bb*/) const {
-        return false;
+    size_t Array3D::calculateCubePositions3DArrayMemoryUsage() {
+        size_t totalMemory = 0;
+
+        if (cubePositions3DArray.empty()) {
+            return totalMemory;
+        }
+
+        int numDronePositions = cubePositions3DArray.size();
+        int zDim = cubePositions3DArray[0].size();
+        int yDim = zDim > 0 ? cubePositions3DArray[0][0].size() : 0;
+        int xDim = yDim > 0 ? cubePositions3DArray[0][0][0].size() : 0;
+
+        size_t sizeOfWindVal = sizeof(WindVal);
+
+        size_t numElements = numDronePositions * zDim * yDim * xDim;
+
+        totalMemory = numElements * sizeOfWindVal;
+
+        return totalMemory;
+    }
+
+    void Array3D::printCubePositions3DArrayMemoryUsage() {
+        size_t totalMemory = calculateCubePositions3DArrayMemoryUsage();
+        std::cout << "Total memory used by cubePositions3DArray: " << totalMemory << " bytes" << std::endl;
+        std::cout << "Total memory used by cubePositions3DArray: " << static_cast<double>(totalMemory) / (1024 * 1024) << " MB" << std::endl;
+    }
+
+    void Array3D::printMemoryUsage() const {
+        size_t totalMemory = 0;
+
+        int zDim = data.size();
+        if (zDim > 0) {
+            int yDim = data[0].size();
+            if (yDim > 0) {
+                int xDim = data[0][0].size();
+                totalMemory = zDim * yDim * xDim * sizeof(WindVal);
+            }
+        }
+
+        std::cout << "Total memory used by Array3D data: " << totalMemory << " bytes" << std::endl;
+        std::cout << "Total memory used by Array3D data: " << static_cast<double>(totalMemory) / (1024 * 1024) << " MB" << std::endl;
     }
 
 } // namespace WindDataProcessor
