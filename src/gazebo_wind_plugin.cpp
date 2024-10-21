@@ -190,28 +190,28 @@ namespace gazebo {
                 windValues[i] = ignition::math::Vector3d(windVal.u, windVal.v, windVal.w);
 
                 // air density at sea level at 15 degree C = 1.225 kg/m^3
-                double airDensity = 1.225;
+                // double airDensity = 1.225;
                 // drag coeff perpendicular to axis
-                double dragCoeff = 1.2;
+                // double dragCoeff = 1.2;
                 /*
                    dimensions of Typhoon480 drone assuming it to be as rough cylinder,
                    with diameter = w
 
                 */
-                double diameter = 0.52; // in meters
-                double height = 0.21; // in meters
+                // double diameter = 0.52; // in meters
+                //double height = 0.21; // in meters
                 // wind pressure = 1/2 * air density * wind velocity ^ 2
                 // double windPressure = 0.5 * airDensity * windValues[i].Dot(windValues[i]) * windValues.Normalize();
 
                 // area
-                double pi = 3.14;
-                double area = height * pi * diameter / 2;
+                // double pi = 3.14;
+                // double area = height * pi * diameter / 2;
 
-                double debug_magnify = 100; // for debugging purposes, to magnify the wind force for better visualization
+                // double debug_magnify = 100; // for debugging purposes, to magnify the wind force for better visualization
 
                 // wind force = area * wind pressure * dragCoeff
-                ignition::math::Vector3d windForce = debug_magnify * 0.5 * dragCoeff * airDensity * area * windValues[i].Dot(windValues[i]) * windValues[i].Normalize();
-
+                // ignition::math::Vector3d windForce = 0.5 * dragCoeff * airDensity * area * windValues[i].Dot(windValues[i]) * windValues[i].Normalize();
+                ignition::math::Vector3d windForce = windValues[i].Dot(windValues[i]) * windValues[i].Normalize();
                 gazebo::physics::LinkPtr link = models[i]->GetLink("base_link");
                 // link->AddForce(windForce);
 
