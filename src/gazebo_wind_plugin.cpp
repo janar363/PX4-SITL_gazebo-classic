@@ -187,7 +187,7 @@ namespace gazebo {
                 }
 
                 WindDataProcessor::WindVal windVal = arr.getCubeWindValue(i, position.X(), position.Y(), position.Z());
-                windValues[i] = ignition::math::Vector3d(10, 0, 0);
+                windValues[i] = ignition::math::Vector3d(30, 0, 0);
 
                 // air density at sea level at 15 degree C = 1.225 kg/m^3
                 // double airDensity = 1.225;
