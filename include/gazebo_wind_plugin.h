@@ -29,6 +29,7 @@
 #include <gazebo/common/Plugin.hh>
 #include <gazebo/gazebo.hh>
 #include <gazebo/physics/physics.hh>
+#include "../include/data_processor/wind_data_processor.h"
 
 #include "Wind.pb.h"
 
@@ -75,6 +76,8 @@ namespace gazebo {
 
         virtual ~GazeboWindPlugin();
 
+        WindDataProcessor::WindVal getNearestWindValue(float x, float y, float z);
+
     protected:
         /// \brief Load the plugin.
         /// \param[in] _model Pointer to the model that loaded this plugin.
@@ -91,10 +94,18 @@ namespace gazebo {
         /// \brief Initialize the plugin after successful loading.
         void InitPlugin(sdf::ElementPtr sdf);
 
+        bool LoadModels();
+        bool LoadSingleModel(const std::string &modelName);
+        bool LoadMultipleModels(const std::string &modelPrefix);
+
+
+
     private:
         /// \brief Pointer to the update event connection.
         event::ConnectionPtr update_connection_;
         event::ConnectionPtr retry_load_connection_;
+        std::unique_ptr<WindDataProcessor::WindDataProcessor> windProcessor;
+        std::vector<physics::ModelPtr> models;
 
         physics::WorldPtr world_;
 

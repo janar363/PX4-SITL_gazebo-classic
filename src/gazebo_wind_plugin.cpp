@@ -28,9 +28,8 @@
 namespace gazebo {
 
     std::vector<gazebo::physics::ModelPtr> models;
-    std::vector<WindDataProcessor::Position> dronePositions;
-    WindDataProcessor::Array3D arr("../../../Tools/sitl_gazebo/include/data_processor/wisp_50.csv",
-                                   "../../../Tools/sitl_gazebo/include/data_processor/3darr.bin");
+    std::vector<WindDataProcessor::Point> dronePositions;
+    static std::unique_ptr<WindDataProcessor::WindDataProcessor> windProcessor;
 
     GazeboWindPlugin::~GazeboWindPlugin() {
         update_connection_->~Connection();
@@ -40,56 +39,72 @@ namespace gazebo {
         world_ = world;
         sdf_ = sdf;  // Store the SDF pointer
 
-        // Get the list of model names from the SDF element
-        std::vector<std::string> modelNames;
-        if (sdf->HasElement("typhoon_h480")) {
-            gazebo::physics::ModelPtr model = world_->ModelByName("typhoon_h480");
-            if (model) {
-                modelNames.push_back("typhoon_h480");
-                models.push_back(model);
+        // Load wind data file
+        const std::string windDataFile = sdf->Get<std::string>("windDataFile", "wisp_50.csv").first;
+        windProcessor = std::make_unique<WindDataProcessor::WindDataProcessor>(windDataFile);
 
-                gzerr << "single drone found in the world." << std::endl;
-                std::cout << "single drone found in the world." << std::endl;
-            } else {
-                gzerr << "Model 'typhoon_h480' not found in the world. Retrying..." << std::endl;
-                this->retry_load_connection_ = event::Events::ConnectWorldUpdateBegin(boost::bind(&GazeboWindPlugin::RetryLoad, this));
-                return;
-            }
-        } else if(sdf->HasElement("typhoon_h480_0")) {
-            gzerr << "multiple drones found in the world." << std::endl;
-            std::cout << "multiple drones found in the world." << std::endl;
-            // Searches for drone models with the prefix "typo_h480_X"
-            int droneIndex = 0;
-            while (true) {
-                std::string modelName = "typhoon_h480_" + std::to_string(droneIndex);
-                gazebo::physics::ModelPtr model = world_->ModelByName(modelName);
-                if (model) {
-                    modelNames.push_back(modelName);
-                    models.push_back(model);
-
-                    droneIndex++;
-                } else {
-                    break;
-                }
-            }
-        } else {
-            gzerr << "Model 'typhoon_h480' not found in the world." << std::endl;
-            this->retry_load_connection_ = event::Events::ConnectWorldUpdateBegin(boost::bind(&GazeboWindPlugin::RetryLoad, this));
+        // Detect and load models
+        if (!LoadModels()) {
+            gzerr << "Failed to find required models in the world. Retrying..." << std::endl;
+            retry_load_connection_ = event::Events::ConnectWorldUpdateBegin(
+                    std::bind(&GazeboWindPlugin::RetryLoad, this));
             return;
         }
 
-        // Rest of the Load function...
-
+        // Initialize the plugin
         this->InitPlugin(sdf);
     }
 
-    void GazeboWindPlugin::RetryLoad() {
-        gazebo::physics::ModelPtr model = world_->ModelByName("typhoon_h480");
+    bool GazeboWindPlugin::LoadModels() {
+        if (sdf_->HasElement("typhoon_h480")) {
+            return LoadSingleModel("typhoon_h480");
+        } else if (sdf_->HasElement("typhoon_h480_0")) {
+            return LoadMultipleModels("typhoon_h480_");
+        } else {
+            gzerr << "No valid model configuration found in the SDF file." << std::endl;
+            return false;
+        }
+    }
+
+    bool GazeboWindPlugin::LoadSingleModel(const std::string &modelName) {
+        auto model = world_->ModelByName(modelName);
         if (model) {
             models.push_back(model);
-            gzerr << "Model 'typhoon_h480' found. Continuing with initialization." << std::endl;
-            this->retry_load_connection_->~Connection(); // Disconnect the retry load event
-            this->InitPlugin(sdf_); // Call the initialization function
+            gzmsg << "Single drone model '" << modelName << "' found in the world." << std::endl;
+            return true;
+        } else {
+            gzerr << "Model '" << modelName << "' not found in the world." << std::endl;
+            return false;
+        }
+    }
+
+    bool GazeboWindPlugin::LoadMultipleModels(const std::string &modelPrefix) {
+        int droneIndex = 0;
+        while (true) {
+            const std::string modelName = modelPrefix + std::to_string(droneIndex);
+            auto model = world_->ModelByName(modelName);
+            if (model) {
+                models.push_back(model);
+                droneIndex++;
+            } else {
+                break;
+            }
+        }
+
+        if (!models.empty()) {
+            gzmsg << "Multiple drone models with prefix '" << modelPrefix << "' found in the world." << std::endl;
+            return true;
+        } else {
+            gzerr << "No drone models with prefix '" << modelPrefix << "' found in the world." << std::endl;
+            return false;
+        }
+    }
+
+
+    void GazeboWindPlugin::RetryLoad() {
+        if (LoadModels()) {
+            retry_load_connection_.reset();
+            InitPlugin(sdf_);
         }
     }
 
@@ -172,53 +187,34 @@ namespace gazebo {
 
         // on update :
         if(!models.empty()){
+            size_t i = 0;
             std::vector<ignition::math::Vector3d> windValues(models.size());
-            for(size_t i = 0; i < models.size(); ++i) {
-                // fetch drone positions
-                ignition::math::Pose3d pose = models[i]->WorldPose();
-                ignition::math::Vector3d position = pose.Pos();
-
-                if(dronePositions.size() == i) {
-                    dronePositions.push_back((WindDataProcessor::Position){(int)position.X(), (int)position.Y(), (int)position.Z()});
+            for (auto &model : world_->Models()) {
+                if (i >= windValues.size()) {
+                    windValues.emplace_back(); // Ensure windValues is large enough
                 }
 
-                if(arr.dronePosOffsets.empty() || abs(position.X() - arr.dronePosOffsets[i].x) < 5 || abs(position.Y() - arr.dronePosOffsets[i].y) < 5 || abs(position.Z() - arr.dronePosOffsets[i].z) < 5) {
-                    arr.computePointsSerial3DArray(dronePositions, 21);
-                }
+                // Fetch drone positions
+                auto pose = model->WorldPose().Pos();
+                auto wind = getNearestWindValue(pose.X(), pose.Y(), pose.Z());
 
-                WindDataProcessor::WindVal windVal = arr.getCubeWindValue(i, position.X(), position.Y(), position.Z());
-                windValues[i] = ignition::math::Vector3d(30, 0, 0);
+                // Update windValues for the current model
+                windValues[i] = ignition::math::Vector3d(wind.u, wind.v, wind.w);
 
-                // air density at sea level at 15 degree C = 1.225 kg/m^3
-                // double airDensity = 1.225;
-                // drag coeff perpendicular to axis
-                // double dragCoeff = 1.2;
-                /*
-                   dimensions of Typhoon480 drone assuming it to be as rough cylinder,
-                   with diameter = w
-
-                */
-                // double diameter = 0.52; // in meters
-                //double height = 0.21; // in meters
-                // wind pressure = 1/2 * air density * wind velocity ^ 2
-                // double windPressure = 0.5 * airDensity * windValues[i].Dot(windValues[i]) * windValues.Normalize();
-
-                // area
-                // double pi = 3.14;
-                // double area = height * pi * diameter / 2;
-
-                // double debug_magnify = 100; // for debugging purposes, to magnify the wind force for better visualization
-
-                // wind force = area * wind pressure * dragCoeff
-                // ignition::math::Vector3d windForce = 0.5 * dragCoeff * airDensity * area * windValues[i].Dot(windValues[i]) * windValues[i].Normalize();
+                // Calculate wind force
                 ignition::math::Vector3d windForce = windValues[i].Dot(windValues[i]) * windValues[i].Normalize();
-                gazebo::physics::LinkPtr link = models[i]->GetLink("base_link");
-                // link->AddForce(windForce);
 
-                // continuous force instead of burst
-                link->SetForce(windForce);
-                gzlog << "applying wind force at pos : (" << position.X() << ", " << position.Y() << ", " << position.Z() << ") -> force (" << windForce.X() << ", " << windForce.Y() << ", " << windForce.Z() << std::endl;
-                std::cout << "applying wind force at pos : (" << position.X() << ", " << position.Y() << ", " << position.Z() << ") -> force (" << windForce.X() << ", " << windForce.Y() << ", " << windForce.Z() << std::endl;
+                // Apply the force to the link
+                gazebo::physics::LinkPtr link = model->GetLink("base_link");
+                if (link) {
+                    link->SetForce(windForce);
+                }
+
+
+
+                gzlog << "applying wind force at pos : (" << pose.X() << ", " << pose.Y() << ", " << pose.Z() << ") -> force (" << windForce.X() << ", " << windForce.Y() << ", " << windForce.Z() << std::endl;
+                std::cout << "applying wind force at pos : (" << pose.X() << ", " << pose.Y() << ", " << pose.Z() << ") -> force (" << windForce.X() << ", " << windForce.Y() << ", " << windForce.Z() << std::endl;
+
 
                 // ignition::math::Vector3d wind_gust(0, 0, 0);
                 // // Calculate the wind gust velocity.
@@ -248,6 +244,7 @@ namespace gazebo {
                 wind_msg.set_allocated_velocity(wind_v);
 
                 wind_pub_->Publish(wind_msg);
+                ++i; // Increment index for the next iteration
             }
         } else {
             std::cout << "model not found\n";
